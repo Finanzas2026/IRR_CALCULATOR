@@ -8,13 +8,13 @@ import io
 from io import BytesIO
 from datetime import datetime
 
-st.set_page_config(page_title="DCF Project Calculator", layout="wide", page_icon="📊")
+st.set_page_config(page_title="DCF Project Calculator", layout="centered", page_icon="📊")
 
 st.markdown("""
 <style>
 section[data-testid="stSidebar"] { display: none; }
 .main .block-container {
-    max-width: 600px !important;
+    max-width: 700px !important;
     padding-top: 1.5rem !important;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
