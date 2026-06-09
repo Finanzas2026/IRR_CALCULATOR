@@ -102,7 +102,21 @@ def load_defaults(project_name: str):
                 ordered.append((c, v))
         sections[sec] = ordered
 
-    return sections, years
+    # Leer métricas desde fila 40 en adelante (col A = label, col B = valor)
+    metrics = []
+    reading = False
+    for row in ws.iter_rows(min_row=40, max_col=2, values_only=True):
+        a, b = row[0], row[1]
+        if str(a).strip().lower() == "description":
+            reading = True
+            continue
+        if reading and a and b is not None:
+            try:
+                metrics.append((str(a).strip(), float(b)))
+            except (TypeError, ValueError):
+                pass
+
+    return sections, years, metrics
 
 def fmt_usd(v):
     if v is None or (isinstance(v, float) and np.isnan(v)):
@@ -195,7 +209,7 @@ with col_info:
     st.markdown(f"<br><span style='color:#888;font-size:13px'>Fuente: <code>Google Sheets</code> · Hoja: <code>{selected}</code></span>",
                 unsafe_allow_html=True)
 
-D, YEARS = load_defaults(selected)
+D, YEARS, METRICS = load_defaults(selected)
 SCOLS = [str(y) for y in YEARS]
 N = len(YEARS)
 st.divider()
@@ -249,33 +263,19 @@ with metrics_container:
                 return sum(vals)
         return 0
 
-    equity_inv  = abs(sum(v for v in fcf_no_fin  if v < 0))
-    roi         = (npv_no  / equity_inv)   if equity_inv    != 0 else None
-    equity_mult = (npv_fin / equity_actual) if equity_actual != 0 else None
-    revenue_tot = abs(concept_total(inflows, "Sales")) + abs(concept_total(inflows, "Rent"))
+    PCT_KEYS  = {"CASH-ON-CASH", "IRR WITH FINANCING", "IRR SIN FINANCING",
+                 "ROI", "ROE", "CAP RATE", "CAP RATE ANUAL"}
+    MULT_KEYS = {"EQUITY MULTIPLE"}
 
-    def _pct(v):  return f"{v*100:.2f}%"  if v is not None else "—"
-    def _num(v):  return f"{v:,.0f}"      if v is not None else "—"
-    def _mult(v): return f"{v:.3f}"       if v is not None else "—"
+    def fmt_metric(key, val):
+        k = key.upper()
+        if k in PCT_KEYS or any(x in k for x in ("IRR", "RATE", "ROI", "ROE", "CASH")):
+            return f"{val*100:.2f}%"
+        if k in MULT_KEYS or "MULTIPLE" in k:
+            return f"{val:.3f}"
+        return fmt_usd(val)
 
-    rows = [
-        ("IRR WITH FINANCING",    _pct(irr_fin)),
-        ("CASH-ON-CASH",          _pct(cash_on_cash)),
-        ("NPV",                   fmt_usd(npv_fin)),
-        ("EQUITY MULTIPLE",       _mult(equity_mult)),
-        ("FCF FROM FINANCING",    fmt_usd(sum(financing_yr))),
-        ("EQUITY",                fmt_usd(equity_actual)),
-        ("ROI",                   _pct(roi)),
-        ("ROE",                   _pct(cash_on_cash)),
-        ("CAP RATE ANUAL",        f"{cap_rate*100:.2f}%" if sales_last != 0 else "—"),
-        ("CAPEX",                 _num(abs(concept_total(outflows, "CAPEX")))),
-        ("OPEX",                  _num(abs(concept_total(outflows, "OPEX")))),
-        ("REVENUE",               _num(revenue_tot)),
-        ("(+) SALES",             _num(abs(concept_total(inflows,  "Sales")))),
-        ("(+) RENT NOI",          _num(abs(concept_total(inflows,  "Rent")))),
-        ("RENT COMM",             _num(abs(concept_total(outflows, "Rent Comm")))),
-        ("SALES COMM",            _num(abs(concept_total(outflows, "Sales Comm")))),
-    ]
+    rows = [(label, fmt_metric(label, val)) for label, val in METRICS]
 
     body = "".join(
         f'<tr style="background:{"#FAFAFA" if i%2==0 else "#FFFFFF"}">'
