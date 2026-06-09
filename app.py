@@ -86,23 +86,32 @@ def load_defaults(project_name: str):
             vals = [_f(v) for v in row[2:2 + n]]
             sections[current].append((concept, vals))
 
+    # Aplanar todos los conceptos cargados del sheet
+    all_loaded = {}
+    for sec_data in sections.values():
+        for concept, vals in sec_data:
+            if concept not in all_loaded:
+                all_loaded[concept] = vals
+
+    # Todos los labels principales van en la primera sección (INFLOWS)
     DEFAULTS = {
-        "INFLOWS":   ["Rent", "Sales"],
-        "OUTFLOWS":  ["CAPEX", "OPEX", "Rent Comm", "Sales Comm"],
+        "INFLOWS":   ["Rent", "Sales", "CAPEX", "OPEX", "Rent Comm", "Sales Comm"],
+        "OUTFLOWS":  [],
         "FINANCING": ["Debt Draw", "Debt Repay"],
     }
 
-    for sec, default_concepts in DEFAULTS.items():
-        loaded = {r[0]: r[1] for r in sections[sec]}
-        ordered = []
-        for c in default_concepts:
-            ordered.append((c, loaded.get(c, [0.0] * n)))
-        for c, v in sections[sec]:
-            if c not in default_concepts:
-                ordered.append((c, v))
-        sections[sec] = ordered
+    claimed = {c for concepts in DEFAULTS.values() for c in concepts}
 
-    return sections, years
+    new_sections = {}
+    for sec, default_concepts in DEFAULTS.items():
+        new_sections[sec] = [(c, all_loaded.get(c, [0.0] * n)) for c in default_concepts]
+
+    # Conceptos extras del sheet (ISR, Income Tax, etc.) van a OUTFLOWS
+    for c, v in all_loaded.items():
+        if c not in claimed:
+            new_sections["OUTFLOWS"].append((c, v))
+
+    return new_sections, years
 
 def fmt_usd(v):
     if v is None or (isinstance(v, float) and np.isnan(v)):
@@ -203,9 +212,9 @@ st.divider()
 metrics_container = st.container()
 st.divider()
 
-inflows   = render_section("INFLOWS — Ingresos",             "INFLOWS",   D["INFLOWS"],   SCOLS, selected)
-outflows  = render_section("OUTFLOWS — Costos y Comisiones", "OUTFLOWS",  D["OUTFLOWS"],  SCOLS, selected)
-st.caption("Los valores de CAPEX, OPEX y comisiones deben ingresarse como números negativos.")
+inflows   = render_section("CASH FLOWS — Ingresos y Costos (CAPEX, OPEX negativos)", "INFLOWS",   D["INFLOWS"],   SCOLS, selected)
+outflows  = render_section("OTHER — Impuestos y Otros",                               "OUTFLOWS",  D["OUTFLOWS"],  SCOLS, selected)
+st.caption("CAPEX, OPEX, Rent Comm y Sales Comm deben ingresarse como números negativos.")
 financing = render_section("FCF FROM FINANCING — Deuda",     "FINANCING", D["FINANCING"], SCOLS, selected)
 
 def sum_by_year(section, n):
