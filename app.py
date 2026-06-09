@@ -14,7 +14,7 @@ st.markdown("""
 <style>
 section[data-testid="stSidebar"] { display: none; }
 .main .block-container {
-    max-width: 900px;
+    max-width: 700px;
     padding-top: 1.5rem;
     padding-left: 2rem;
     padding-right: 2rem;
