@@ -289,6 +289,27 @@ outflows_yr = sum_by_year(outflows, N)
 fcf_no_fin  = [inflows_yr[i] + outflows_yr[i] for i in range(N)]
 npv_no      = sum(fcf_no_fin)
 
+# Totales consolidados INFLOWS / OUTFLOWS
+st.markdown('<div class="section-hdr">TOTALES</div>', unsafe_allow_html=True)
+totals_df = pd.DataFrame([
+    {"Concepto": "▶ TOTAL INFLOWS",  **{SCOLS[i]: inflows_yr[i]  for i in range(N)}, "SUBTOTAL": sum(inflows_yr)},
+    {"Concepto": "▶ TOTAL OUTFLOWS", **{SCOLS[i]: outflows_yr[i] for i in range(N)}, "SUBTOTAL": sum(outflows_yr)},
+])
+st.dataframe(
+    totals_df.style.apply(
+        lambda r: [
+            "background-color:#1E3A5F;color:white;font-weight:bold" if r["Concepto"].endswith("INFLOWS")
+            else "background-color:#3B1F5E;color:white;font-weight:bold"
+        ] * len(r), axis=1
+    ).format(
+        lambda x: "-" if x == 0 else (f"({abs(x):,.0f})" if x < 0 else f"${x:,.0f}"),
+        subset=SCOLS + ["SUBTOTAL"],
+    ),
+    use_container_width=True,
+    hide_index=True,
+    column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
+)
+
 st.markdown('<div class="section-hdr">FCF SIN FINANCIAMIENTO</div>', unsafe_allow_html=True)
 render_fcf_row("FCF (Excluye Financiamiento)", fcf_no_fin, npv_no, SCOLS)
 
