@@ -167,6 +167,26 @@ def total_row_style(df, num_cols):
         lambda r: ["background-color:#1E3A5F;color:white;font-weight:bold"] * len(r), axis=1
     ).format(lambda x: "-" if x == 0 else (f"({abs(x):,.0f})" if x < 0 else f"${x:,.0f}"), subset=num_cols)
 
+def sum_by_year(section, n):
+    return [sum(vals[i] for _, vals in section) for i in range(n)]
+
+def render_fcf_row(label, year_vals, subtotal, scols):
+    row = {"Concepto": label}
+    row.update({scols[i]: year_vals[i] for i in range(len(scols))})
+    row["SUBTOTAL"] = subtotal
+    df = pd.DataFrame([row])
+    st.dataframe(
+        df.style.apply(
+            lambda r: ["background-color:#DBEAFE;color:#1E3A5F;font-weight:bold"] * len(r), axis=1
+        ).format(
+            lambda x: f"({abs(x):,.0f})" if x < 0 else f"${x:,.0f}",
+            subset=scols + ["SUBTOTAL"],
+        ),
+        use_container_width=True,
+        hide_index=True,
+        column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
+    )
+
 def render_section(title, key, section_data, scols, selected):
     st.markdown(f'<div class="section-hdr">{title}</div>', unsafe_allow_html=True)
 
@@ -261,19 +281,24 @@ st.divider()
 metrics_container = st.container()
 st.divider()
 
-inflows   = render_section("INFLOWS",   "INFLOWS",   D["INFLOWS"],   SCOLS, selected)
-outflows  = render_section("OUTFLOWS",  "OUTFLOWS",  D["OUTFLOWS"],  SCOLS, selected)
-financing = render_section("FINANCING", "FINANCING", D["FINANCING"], SCOLS, selected)
+inflows  = render_section("INFLOWS",  "INFLOWS",  D["INFLOWS"],  SCOLS, selected)
+outflows = render_section("OUTFLOWS", "OUTFLOWS", D["OUTFLOWS"], SCOLS, selected)
 
-def sum_by_year(section, n):
-    return [sum(vals[i] for _, vals in section) for i in range(n)]
+inflows_yr  = sum_by_year(inflows, N)
+outflows_yr = sum_by_year(outflows, N)
+fcf_no_fin  = [inflows_yr[i] + outflows_yr[i] for i in range(N)]
+npv_no      = sum(fcf_no_fin)
 
-inflows_yr   = sum_by_year(inflows,  N)
-outflows_yr  = sum_by_year(outflows, N)
+st.markdown('<div class="section-hdr">FCF SIN FINANCIAMIENTO</div>', unsafe_allow_html=True)
+render_fcf_row("FCF (Excluye Financiamiento)", fcf_no_fin, npv_no, SCOLS)
+
+financing    = render_section("FINANCING", "FINANCING", D["FINANCING"], SCOLS, selected)
 financing_yr = sum_by_year(financing, N)
-
-fcf_no_fin   = [inflows_yr[i] + outflows_yr[i]  for i in range(N)]
 fcf_with_fin = [fcf_no_fin[i] + financing_yr[i] for i in range(N)]
+npv_fin      = sum(fcf_with_fin)
+
+st.markdown('<div class="section-hdr">FCF CON FINANCIAMIENTO</div>', unsafe_allow_html=True)
+render_fcf_row("FCF (Incluye Financiamiento)", fcf_with_fin, npv_fin, SCOLS)
 
 def safe_irr(cf):
     try:
@@ -287,8 +312,6 @@ def safe_irr(cf):
 
 irr_no  = safe_irr(fcf_no_fin)
 irr_fin = safe_irr(fcf_with_fin)
-npv_no  = sum(fcf_no_fin)
-npv_fin = sum(fcf_with_fin)
 
 noi_last   = inflows_yr[-1] + outflows_yr[-1]
 sales_last = inflows_yr[-1]
@@ -339,25 +362,6 @@ with metrics_container:
       <tbody>{body}</tbody>
     </table>
     """, unsafe_allow_html=True)
-
-st.divider()
-st.markdown('<div class="section-hdr">FREE CASH FLOW — Resultados Calculados</div>', unsafe_allow_html=True)
-
-fcf_df = pd.DataFrame(
-    {"Concepto": ["FCF (Sin Financiamiento)", "FCF (Con Financiamiento)"]}
-    | {str(y): [fcf_no_fin[i], fcf_with_fin[i]] for i, y in enumerate(YEARS)}
-    | {"SUBTOTAL": [npv_no, npv_fin]}
-)
-
-st.dataframe(
-    fcf_df.style.format(
-        lambda x: f"({abs(x):,.0f})" if x < 0 else f"${x:,.0f}",
-        subset=[str(y) for y in YEARS] + ["SUBTOTAL"],
-    ),
-    use_container_width=True,
-    hide_index=True,
-    column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
-)
 
 st.divider()
 st.markdown('<div class="section-hdr">DESCARGAR REPORTE</div>', unsafe_allow_html=True)
