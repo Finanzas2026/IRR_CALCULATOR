@@ -86,32 +86,23 @@ def load_defaults(project_name: str):
             vals = [_f(v) for v in row[2:2 + n]]
             sections[current].append((concept, vals))
 
-    # Aplanar todos los conceptos cargados del sheet
-    all_loaded = {}
-    for sec_data in sections.values():
-        for concept, vals in sec_data:
-            if concept not in all_loaded:
-                all_loaded[concept] = vals
-
-    # Todos los labels principales van en la primera sección (INFLOWS)
     DEFAULTS = {
-        "INFLOWS":   ["Rent", "Sales", "CAPEX", "OPEX", "Rent Comm", "Sales Comm"],
-        "OUTFLOWS":  [],
+        "INFLOWS":   ["Rent", "Sales"],
+        "OUTFLOWS":  ["CAPEX", "OPEX", "Rent Comm", "Sales Comm"],
         "FINANCING": ["Debt Draw", "Debt Repay"],
     }
 
-    claimed = {c for concepts in DEFAULTS.values() for c in concepts}
-
-    new_sections = {}
     for sec, default_concepts in DEFAULTS.items():
-        new_sections[sec] = [(c, all_loaded.get(c, [0.0] * n)) for c in default_concepts]
+        loaded = {r[0]: r[1] for r in sections[sec]}
+        ordered = []
+        for c in default_concepts:
+            ordered.append((c, loaded.get(c, [0.0] * n)))
+        for c, v in sections[sec]:
+            if c not in default_concepts:
+                ordered.append((c, v))
+        sections[sec] = ordered
 
-    # Conceptos extras del sheet (ISR, Income Tax, etc.) van a OUTFLOWS
-    for c, v in all_loaded.items():
-        if c not in claimed:
-            new_sections["OUTFLOWS"].append((c, v))
-
-    return new_sections, years
+    return sections, years
 
 def fmt_usd(v):
     if v is None or (isinstance(v, float) and np.isnan(v)):
@@ -212,9 +203,9 @@ st.divider()
 metrics_container = st.container()
 st.divider()
 
-inflows   = render_section("CASH FLOWS — Ingresos y Costos (CAPEX, OPEX negativos)", "INFLOWS",   D["INFLOWS"],   SCOLS, selected)
-outflows  = render_section("OTHER — Impuestos y Otros",                               "OUTFLOWS",  D["OUTFLOWS"],  SCOLS, selected)
-st.caption("CAPEX, OPEX, Rent Comm y Sales Comm deben ingresarse como números negativos.")
+inflows   = render_section("INFLOWS — Ingresos",             "INFLOWS",   D["INFLOWS"],   SCOLS, selected)
+outflows  = render_section("OUTFLOWS — Costos y Comisiones", "OUTFLOWS",  D["OUTFLOWS"],  SCOLS, selected)
+st.caption("Los valores de CAPEX, OPEX y comisiones deben ingresarse como números negativos.")
 financing = render_section("FCF FROM FINANCING — Deuda",     "FINANCING", D["FINANCING"], SCOLS, selected)
 
 def sum_by_year(section, n):
@@ -260,6 +251,23 @@ with metrics_container:
     k4.markdown(kpi_card("NPV Con Financiamiento", fmt_usd(npv_fin), "Suma FCF"), unsafe_allow_html=True)
     k5.markdown(kpi_card("Cash-on-Cash",
                          f"{cash_on_cash*100:.2f}%" if cash_on_cash is not None else "—", "NPV / Equity"), unsafe_allow_html=True)
+
+    # Tarjetas de totales por concepto
+    st.markdown('<div class="section-hdr">TOTALES POR CONCEPTO</div>', unsafe_allow_html=True)
+
+    def concept_total(section, name):
+        for concept, vals in section:
+            if concept == name:
+                return sum(vals)
+        return 0
+
+    t1, t2, t3, t4, t5, t6 = st.columns(6)
+    t1.markdown(kpi_card("Rent",       fmt_usd(concept_total(inflows,  "Rent")),       "Total Inflow"),  unsafe_allow_html=True)
+    t2.markdown(kpi_card("Sales",      fmt_usd(concept_total(inflows,  "Sales")),      "Total Inflow"),  unsafe_allow_html=True)
+    t3.markdown(kpi_card("CAPEX",      fmt_usd(concept_total(outflows, "CAPEX")),      "Total Outflow"), unsafe_allow_html=True)
+    t4.markdown(kpi_card("OPEX",       fmt_usd(concept_total(outflows, "OPEX")),       "Total Outflow"), unsafe_allow_html=True)
+    t5.markdown(kpi_card("Rent Comm",  fmt_usd(concept_total(outflows, "Rent Comm")),  "Total Outflow"), unsafe_allow_html=True)
+    t6.markdown(kpi_card("Sales Comm", fmt_usd(concept_total(outflows, "Sales Comm")), "Total Outflow"), unsafe_allow_html=True)
 
     st.markdown("**Resumen IRR / NPV**")
     st.dataframe(pd.DataFrame({
