@@ -261,13 +261,16 @@ with metrics_container:
                 return sum(vals)
         return 0
 
-    t1, t2, t3, t4, t5, t6 = st.columns(6)
-    t1.markdown(kpi_card("Rent",       fmt_usd(concept_total(inflows,  "Rent")),       "Total Inflow"),  unsafe_allow_html=True)
-    t2.markdown(kpi_card("Sales",      fmt_usd(concept_total(inflows,  "Sales")),      "Total Inflow"),  unsafe_allow_html=True)
-    t3.markdown(kpi_card("CAPEX",      fmt_usd(concept_total(outflows, "CAPEX")),      "Total Outflow"), unsafe_allow_html=True)
-    t4.markdown(kpi_card("OPEX",       fmt_usd(concept_total(outflows, "OPEX")),       "Total Outflow"), unsafe_allow_html=True)
-    t5.markdown(kpi_card("Rent Comm",  fmt_usd(concept_total(outflows, "Rent Comm")),  "Total Outflow"), unsafe_allow_html=True)
-    t6.markdown(kpi_card("Sales Comm", fmt_usd(concept_total(outflows, "Sales Comm")), "Total Outflow"), unsafe_allow_html=True)
+    all_concepts = (
+        [(c, vals, "Inflow")    for c, vals in inflows]  +
+        [(c, vals, "Outflow")   for c, vals in outflows] +
+        [(c, vals, "Financing") for c, vals in financing]
+    )
+    for i in range(0, len(all_concepts), 3):
+        chunk = all_concepts[i:i+3]
+        cols  = st.columns(3)
+        for j, (concept, vals, sub) in enumerate(chunk):
+            cols[j].markdown(kpi_card(concept, fmt_usd(abs(sum(vals))), sub), unsafe_allow_html=True)
 
     st.markdown("**Resumen IRR / NPV**")
     st.dataframe(pd.DataFrame({
