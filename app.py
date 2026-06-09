@@ -14,7 +14,7 @@ st.markdown("""
 <style>
 section[data-testid="stSidebar"] { display: none; }
 .main .block-container {
-    max-width: 700px !important;
+    max-width: 900px !important;
     padding-top: 1.5rem !important;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
@@ -164,10 +164,12 @@ def kpi_card(label, value, sub="", green=False):
 CONCEPT_WIDTH = 220
 
 def col_cfg(scols):
-    cfg = {"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)}
+    cfg = {"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH, pinned=True)}
     cfg.update({y: st.column_config.NumberColumn(y, format="$%,.0f", width="small") for y in scols})
     cfg["SUBTOTAL"] = st.column_config.NumberColumn("SUBTOTAL", format="$%,.0f", width="small")
     return cfg
+
+PINNED_CONCEPTO = {"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH, pinned=True)}
 
 def total_row_style(df, num_cols):
     return df.style.apply(
@@ -191,7 +193,7 @@ def render_fcf_row(label, year_vals, subtotal, scols):
         ),
         use_container_width=True,
         hide_index=True,
-        column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
+        column_config=PINNED_CONCEPTO,
     )
 
 def render_section(title, key, section_data, scols, selected):
@@ -262,7 +264,7 @@ def render_section(title, key, section_data, scols, selected):
             total_row_style(total_row, list(scols) + ["SUBTOTAL"]),
             use_container_width=True,
             hide_index=True,
-            column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
+            column_config=PINNED_CONCEPTO,
         )
 
         all_results.extend(sg_results)
@@ -314,7 +316,7 @@ st.dataframe(
     ),
     use_container_width=True,
     hide_index=True,
-    column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
+    column_config=PINNED_CONCEPTO,
 )
 
 st.markdown('<div class="section-hdr">FCF SIN FINANCIAMIENTO</div>', unsafe_allow_html=True)
