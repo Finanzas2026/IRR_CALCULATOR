@@ -298,8 +298,8 @@ totals_df = pd.DataFrame([
 st.dataframe(
     totals_df.style.apply(
         lambda r: [
-            "background-color:#1E3A5F;color:white;font-weight:bold" if r["Concepto"].endswith("INFLOWS")
-            else "background-color:#3B1F5E;color:white;font-weight:bold"
+            "background-color:#DBEAFE;color:#1e40af;font-weight:bold" if r["Concepto"].endswith("INFLOWS")
+            else "background-color:#FEE2E2;color:#991b1b;font-weight:bold"
         ] * len(r), axis=1
     ).format(
         lambda x: "-" if x == 0 else (f"({abs(x):,.0f})" if x < 0 else f"${x:,.0f}"),
