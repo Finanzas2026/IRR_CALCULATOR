@@ -13,7 +13,14 @@ st.set_page_config(page_title="DCF Project Calculator", layout="wide", page_icon
 st.markdown("""
 <style>
 section[data-testid="stSidebar"] { display: none; }
-.main .block-container { max-width: 1400px; padding-top: 1.5rem; }
+.main .block-container {
+    max-width: 900px;
+    padding-top: 1.5rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    margin-left: auto;
+    margin-right: auto;
+}
 .kpi-card {
     background: #ffffff; border-radius: 10px; padding: 14px 10px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.10); text-align: center;
