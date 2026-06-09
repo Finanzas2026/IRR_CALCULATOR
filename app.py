@@ -77,7 +77,7 @@ def load_defaults(project_name: str):
         except (TypeError, ValueError):
             return 0.0
 
-    for row in ws.iter_rows(min_row=3, values_only=True):
+    for row in ws.iter_rows(min_row=3, max_row=39, values_only=True):
         sec     = str(row[0]).strip() if row[0] else ""
         concept = str(row[1]).strip() if row[1] else ""
 
