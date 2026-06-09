@@ -14,12 +14,12 @@ st.markdown("""
 <style>
 section[data-testid="stSidebar"] { display: none; }
 .main .block-container {
-    max-width: 700px;
-    padding-top: 1.5rem;
-    padding-left: 2rem;
-    padding-right: 2rem;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: 900px !important;
+    padding-top: 1.5rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
 .kpi-card {
     background: #ffffff; border-radius: 10px; padding: 14px 10px;
