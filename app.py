@@ -242,18 +242,6 @@ cash_on_cash  = npv_fin / equity_actual if equity_actual != 0 else None
 
 with metrics_container:
     st.markdown('<div class="section-hdr">INVESTMENT RETURNS — Métricas Clave</div>', unsafe_allow_html=True)
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.markdown(kpi_card("IRR Sin Financiamiento",
-                         f"{irr_no*100:.2f}%"  if irr_no  is not None else "—", "Project Closing"), unsafe_allow_html=True)
-    k2.markdown(kpi_card("IRR Con Financiamiento",
-                         f"{irr_fin*100:.2f}%" if irr_fin is not None else "—", "Project Closing", green=True), unsafe_allow_html=True)
-    k3.markdown(kpi_card("NPV Sin Financiamiento", fmt_usd(npv_no),  "Suma FCF"), unsafe_allow_html=True)
-    k4.markdown(kpi_card("NPV Con Financiamiento", fmt_usd(npv_fin), "Suma FCF"), unsafe_allow_html=True)
-    k5.markdown(kpi_card("Cash-on-Cash",
-                         f"{cash_on_cash*100:.2f}%" if cash_on_cash is not None else "—", "NPV / Equity"), unsafe_allow_html=True)
-
-    # Tarjetas de totales por concepto
-    st.markdown('<div class="section-hdr">TOTALES POR CONCEPTO</div>', unsafe_allow_html=True)
 
     def concept_total(section, name):
         for concept, vals in section:
@@ -261,24 +249,53 @@ with metrics_container:
                 return sum(vals)
         return 0
 
-    all_concepts = (
-        [(c, vals, "Inflow")    for c, vals in inflows]  +
-        [(c, vals, "Outflow")   for c, vals in outflows] +
-        [(c, vals, "Financing") for c, vals in financing]
-    )
-    for i in range(0, len(all_concepts), 3):
-        chunk = all_concepts[i:i+3]
-        cols  = st.columns(3)
-        for j, (concept, vals, sub) in enumerate(chunk):
-            cols[j].markdown(kpi_card(concept, fmt_usd(abs(sum(vals))), sub), unsafe_allow_html=True)
+    equity_inv  = abs(sum(v for v in fcf_no_fin  if v < 0))
+    roi         = (npv_no  / equity_inv)   if equity_inv    != 0 else None
+    equity_mult = (npv_fin / equity_actual) if equity_actual != 0 else None
+    revenue_tot = abs(concept_total(inflows, "Sales")) + abs(concept_total(inflows, "Rent"))
 
-    st.markdown("**Resumen IRR / NPV**")
-    st.dataframe(pd.DataFrame({
-        "Descripción":    ["IRR Sin Financiamiento", "IRR Con Financiamiento"],
-        "TIR":            [f"{irr_no*100:.2f}%"  if irr_no  is not None else "—",
-                           f"{irr_fin*100:.2f}%" if irr_fin is not None else "—"],
-        "VAN (Suma FCF)": [fmt_usd(npv_no), fmt_usd(npv_fin)],
-    }), use_container_width=False, hide_index=True)
+    def _pct(v):  return f"{v*100:.2f}%"  if v is not None else "—"
+    def _num(v):  return f"{v:,.0f}"      if v is not None else "—"
+    def _mult(v): return f"{v:.3f}"       if v is not None else "—"
+
+    rows = [
+        ("IRR WITH FINANCING",    _pct(irr_fin)),
+        ("CASH-ON-CASH",          _pct(cash_on_cash)),
+        ("NPV",                   fmt_usd(npv_fin)),
+        ("EQUITY MULTIPLE",       _mult(equity_mult)),
+        ("FCF FROM FINANCING",    fmt_usd(sum(financing_yr))),
+        ("EQUITY",                fmt_usd(equity_actual)),
+        ("ROI",                   _pct(roi)),
+        ("ROE",                   _pct(cash_on_cash)),
+        ("CAP RATE ANUAL",        f"{cap_rate*100:.2f}%" if sales_last != 0 else "—"),
+        ("CAPEX",                 _num(abs(concept_total(outflows, "CAPEX")))),
+        ("OPEX",                  _num(abs(concept_total(outflows, "OPEX")))),
+        ("REVENUE",               _num(revenue_tot)),
+        ("(+) SALES",             _num(abs(concept_total(inflows,  "Sales")))),
+        ("(+) RENT NOI",          _num(abs(concept_total(inflows,  "Rent")))),
+        ("RENT COMM",             _num(abs(concept_total(outflows, "Rent Comm")))),
+        ("SALES COMM",            _num(abs(concept_total(outflows, "Sales Comm")))),
+    ]
+
+    body = "".join(
+        f'<tr style="background:{"#FAFAFA" if i%2==0 else "#FFFFFF"}">'
+        f'<td style="padding:7px 14px;font-size:12px;font-weight:700;color:#1a1a2e;border-bottom:1px solid #eee">{d}</td>'
+        f'<td style="padding:7px 14px;text-align:right;font-size:12px;font-weight:700;color:#0052FF;border-bottom:1px solid #eee">{v}</td>'
+        f'</tr>'
+        for i, (d, v) in enumerate(rows)
+    )
+
+    st.markdown(f"""
+    <table style="width:48%;border-collapse:collapse;font-family:sans-serif;border:1px solid #ddd;overflow:hidden;margin-bottom:16px">
+      <thead>
+        <tr style="background:#F5F0C8">
+          <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#333;border-bottom:2px solid #ccc">DESCRIPTION</th>
+          <th style="padding:10px 14px;text-align:right;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#333;border-bottom:2px solid #ccc">PROJECT CLOSING OPERATOR</th>
+        </tr>
+      </thead>
+      <tbody>{body}</tbody>
+    </table>
+    """, unsafe_allow_html=True)
 
 st.divider()
 st.markdown('<div class="section-hdr">FREE CASH FLOW — Resultados Calculados</div>', unsafe_allow_html=True)
