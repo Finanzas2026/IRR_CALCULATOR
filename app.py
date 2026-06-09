@@ -27,7 +27,13 @@ section[data-testid="stSidebar"] { display: none; }
 .section-hdr {
     font-size: 13px; font-weight: 800; color: #0052FF;
     letter-spacing: 2px; text-transform: uppercase;
-    border-left: 4px solid #0052FF; padding-left: 10px; margin: 20px 0 10px;
+    border-left: 4px solid #0052FF; padding-left: 10px; margin: 20px 0 6px;
+}
+.subgroup-hdr {
+    background: #F5F0C8; padding: 5px 12px 5px 16px;
+    font-size: 11px; font-weight: 800; letter-spacing: 1.2px;
+    color: #5D4E0D; border-left: 4px solid #C8A800;
+    margin: 6px 0 1px 0;
 }
 .page-title { font-size: 26px; font-weight: 900; color: #0052FF; letter-spacing: 1px; }
 .page-sub   { font-size: 13px; color: #888; margin-top: -4px; }
@@ -123,6 +129,26 @@ def fmt_usd(v):
         return "—"
     return f"(${abs(v):,.0f})" if v < 0 else f"${v:,.0f}"
 
+# Sub-group visual grouping (purely display — data structure unchanged)
+CONCEPT_SUBGROUP = {
+    "Rent":       "REVENUE",
+    "Sales":      "REVENUE",
+    "CAPEX":      "COSTS & EXPENSES",
+    "OPEX":       "COSTS & EXPENSES",
+    "Rent Comm":  "COMMISSIONS",
+    "Sales Comm": "COMMISSIONS",
+}
+SEC_SUBGROUPS = {
+    "INFLOWS":   ["REVENUE"],
+    "OUTFLOWS":  ["COSTS & EXPENSES", "COMMISSIONS", "TAXES"],
+    "FINANCING": ["FCF FROM FINANCING"],
+}
+SEC_DEFAULT_SG = {
+    "INFLOWS":   "REVENUE",
+    "OUTFLOWS":  "TAXES",
+    "FINANCING": "FCF FROM FINANCING",
+}
+
 def kpi_card(label, value, sub="", green=False):
     cls = "kpi-val-green" if green else "kpi-val"
     return (f'<div class="kpi-card"><div class="kpi-label">{label}</div>'
@@ -133,7 +159,7 @@ CONCEPT_WIDTH = 220
 def col_cfg(scols):
     cfg = {"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)}
     cfg.update({y: st.column_config.NumberColumn(y, format="$%,.0f", width="small") for y in scols})
-    cfg["TOTAL"] = st.column_config.NumberColumn("TOTAL", format="$%,.0f", width="small")
+    cfg["SUBTOTAL"] = st.column_config.NumberColumn("SUBTOTAL", format="$%,.0f", width="small")
     return cfg
 
 def total_row_style(df, num_cols):
@@ -144,59 +170,77 @@ def total_row_style(df, num_cols):
 def render_section(title, key, section_data, scols, selected):
     st.markdown(f'<div class="section-hdr">{title}</div>', unsafe_allow_html=True)
 
-    labels   = [r[0] for r in section_data]
-    n_rows   = len(labels)
-    vals_key = f"vals_{key}_{selected}"
+    # Assign each concept to its sub-group
+    sg_data = {}
+    for concept, vals in section_data:
+        sg = CONCEPT_SUBGROUP.get(concept, SEC_DEFAULT_SG.get(key, "OTHER"))
+        sg_data.setdefault(sg, []).append((concept, vals))
 
-    if vals_key not in st.session_state or len(st.session_state[vals_key]) != n_rows:
-        st.session_state[vals_key] = [list(r[1]) for r in section_data]
+    subgroups  = SEC_SUBGROUPS.get(key, ["OTHER"])
+    all_results = []
 
-    row_totals = [sum(v) for v in st.session_state[vals_key]]
+    for sg in subgroups:
+        sg_concepts = sg_data.get(sg, [])
+        if not sg_concepts:
+            continue
 
-    df = pd.DataFrame(st.session_state[vals_key], columns=scols)
-    df.insert(0, "Concepto", labels)
-    df["TOTAL"] = row_totals
+        st.markdown(f'<div class="subgroup-hdr">{sg}</div>', unsafe_allow_html=True)
 
-    edited = st.data_editor(
-        df,
-        use_container_width=True,
-        num_rows="fixed",
-        key=f"editor_{key}_{selected}",
-        disabled=["TOTAL"],
-        column_config=col_cfg(scols),
-        hide_index=True,
-    )
+        n_rows   = len(sg_concepts)
+        vals_key = f"vals_{key}_{sg}_{selected}"
 
-    edited[scols] = edited[scols].fillna(0).astype(float)
+        if vals_key not in st.session_state or len(st.session_state[vals_key]) != n_rows:
+            st.session_state[vals_key] = [list(c[1]) for c in sg_concepts]
 
-    result   = []
-    new_vals = []
-    for i in range(len(edited)):
-        concept = str(edited.iloc[i]["Concepto"] or f"Concepto {i+1}")
-        vals    = edited.iloc[i][scols].tolist()
-        result.append((concept, vals))
-        new_vals.append(vals)
+        labels     = [c[0] for c in sg_concepts]
+        row_totals = [sum(v) for v in st.session_state[vals_key]]
 
-    if new_vals != st.session_state[vals_key]:
-        st.session_state[vals_key] = new_vals
-        st.rerun()
+        df = pd.DataFrame(st.session_state[vals_key], columns=scols)
+        df.insert(0, "Concepto", labels)
+        df["SUBTOTAL"] = row_totals
 
-    col_sums  = edited[scols].sum()
-    total_val = col_sums.sum()
-    total_row = pd.DataFrame([{
-        "Concepto": f"▶ TOTAL {key}",
-        **col_sums.to_dict(),
-        "TOTAL": total_val
-    }])
+        edited = st.data_editor(
+            df,
+            use_container_width=True,
+            num_rows="fixed",
+            key=f"editor_{key}_{sg}_{selected}",
+            disabled=["SUBTOTAL"],
+            column_config=col_cfg(scols),
+            hide_index=True,
+        )
 
-    st.dataframe(
-        total_row_style(total_row, scols + ["TOTAL"]),
-        use_container_width=True,
-        hide_index=True,
-        column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
-    )
+        edited[scols] = edited[scols].fillna(0).astype(float)
 
-    return result
+        sg_results    = []
+        new_vals_list = []
+        for i in range(len(edited)):
+            concept = str(edited.iloc[i]["Concepto"] or sg_concepts[i][0])
+            vals    = edited.iloc[i][scols].tolist()
+            sg_results.append((concept, vals))
+            new_vals_list.append(vals)
+
+        if new_vals_list != st.session_state[vals_key]:
+            st.session_state[vals_key] = new_vals_list
+            st.rerun()
+
+        # Consolidated total row for this sub-group
+        sg_year_totals = edited[scols].sum()
+        sg_total       = sg_year_totals.sum()
+        total_row = pd.DataFrame([{
+            "Concepto": f"▶ {sg}",
+            **sg_year_totals.to_dict(),
+            "SUBTOTAL": sg_total,
+        }])
+        st.dataframe(
+            total_row_style(total_row, list(scols) + ["SUBTOTAL"]),
+            use_container_width=True,
+            hide_index=True,
+            column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
+        )
+
+        all_results.extend(sg_results)
+
+    return all_results
 
 st.markdown('<div class="page-title">📊 DCF PROJECT CALCULATOR</div>', unsafe_allow_html=True)
 st.markdown('<div class="page-sub">Selecciona un proyecto · edita las celdas · los resultados se recalculan automáticamente</div>', unsafe_allow_html=True)
@@ -217,10 +261,9 @@ st.divider()
 metrics_container = st.container()
 st.divider()
 
-inflows   = render_section("INFLOWS — Ingresos",             "INFLOWS",   D["INFLOWS"],   SCOLS, selected)
-outflows  = render_section("OUTFLOWS — Costos y Comisiones", "OUTFLOWS",  D["OUTFLOWS"],  SCOLS, selected)
-st.caption("Los valores de CAPEX, OPEX y comisiones deben ingresarse como números negativos.")
-financing = render_section("FCF FROM FINANCING — Deuda",     "FINANCING", D["FINANCING"], SCOLS, selected)
+inflows   = render_section("INFLOWS",   "INFLOWS",   D["INFLOWS"],   SCOLS, selected)
+outflows  = render_section("OUTFLOWS",  "OUTFLOWS",  D["OUTFLOWS"],  SCOLS, selected)
+financing = render_section("FINANCING", "FINANCING", D["FINANCING"], SCOLS, selected)
 
 def sum_by_year(section, n):
     return [sum(vals[i] for _, vals in section) for i in range(n)]
