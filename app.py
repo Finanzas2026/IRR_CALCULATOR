@@ -8,23 +8,18 @@ import io
 from io import BytesIO
 from datetime import datetime
 
-st.set_page_config(page_title="DCF Project Calculator", layout="centered", page_icon="📊")
+st.set_page_config(page_title="DCF Project Calculator", layout="wide", page_icon="📊")
 
 st.markdown("""
 <style>
 section[data-testid="stSidebar"] { display: none; }
 .main .block-container {
-    max-width: 900px !important;
-    width: 100% !important;
-    padding-top: 1.5rem !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
+    padding-top: 1.5rem;
+    max-width: 70vw !important;
     margin-left: auto !important;
     margin-right: auto !important;
-}
-.stMain > div {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    padding-left: 1rem;
+    padding-right: 1rem;
 }
 .kpi-card {
     background: #ffffff; border-radius: 10px; padding: 14px 10px;
