@@ -15,9 +15,9 @@ st.markdown("""
 section[data-testid="stSidebar"] { display: none; }
 .main .block-container {
     max-width: 1500px !important;
-    padding-top: 1.5rem !important;
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
+    padding-top: 1rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
     margin-left: auto !important;
     margin-right: auto !important;
 }
