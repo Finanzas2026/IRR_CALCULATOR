@@ -3,14 +3,13 @@ import pandas as pd
 import numpy as np
 import numpy_financial as npf
 import openpyxl
+import requests
+import io
 from io import BytesIO
 from datetime import datetime
-import os
 
 # ── CONFIG ─────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="DCF Project Calculator", layout="wide", page_icon="📊")
-
-DATA_FILE = r"C:\Users\Arturo Aguilar\Documents\CLOSING\DCF_Projects\DCF_DATA_APP.xlsx"
 
 # ── STYLES ─────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -37,16 +36,23 @@ section[data-testid="stSidebar"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
+# ── DESCARGA DESDE GOOGLE SHEETS ──────────────────────────────────────────────
+@st.cache_data(ttl=300)
+def _download_xlsx():
+    FILE_ID = st.secrets["FILE_ID"]
+    r = requests.get(f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=xlsx")
+    return r.content
+
 # ── PROYECTO SELECTOR ──────────────────────────────────────────────────────────
 @st.cache_data
 def get_projects():
-    wb = openpyxl.load_workbook(DATA_FILE, read_only=True)
+    wb = openpyxl.load_workbook(io.BytesIO(_download_xlsx()), read_only=True)
     return [s for s in wb.sheetnames if s not in ("INSTRUCCIONES", "PLANTILLA")]
 
 # ── LOAD DEFAULTS (completamente dinámico) ─────────────────────────────────────
 @st.cache_data
 def load_defaults(project_name: str):
-    wb = openpyxl.load_workbook(DATA_FILE, data_only=True)
+    wb = openpyxl.load_workbook(io.BytesIO(_download_xlsx()), data_only=True)
     ws = wb[project_name]
 
     # Años desde fila 2 (acepta int o string)
@@ -66,14 +72,22 @@ def load_defaults(project_name: str):
     sections = {"INFLOWS": [], "OUTFLOWS": [], "FINANCING": []}
     current = None
 
+    def _f(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
+
     for row in ws.iter_rows(min_row=3, values_only=True):
-        sec = str(row[0]).strip() if row[0] else ""
+        sec     = str(row[0]).strip() if row[0] else ""
         concept = str(row[1]).strip() if row[1] else ""
-        vals = [float(v) if v is not None else 0.0 for v in row[2:2 + n]]
 
         if sec in KNOWN:
             current = sec
-        if current:
+            continue  # fila de cabecera de sección, no es dato
+
+        if current and concept:
+            vals = [_f(v) for v in row[2:2 + n]]
             sections[current].append((concept, vals))
 
     return sections, years
@@ -93,8 +107,8 @@ CONCEPT_WIDTH = 220
 
 def col_cfg(scols):
     cfg = {"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)}
-    cfg.update({y: st.column_config.NumberColumn(y, format="$%d", width="small") for y in scols})
-    cfg["TOTAL"] = st.column_config.NumberColumn("TOTAL", format="$%d", width="small")
+    cfg.update({y: st.column_config.NumberColumn(y, format="$%,.0f", width="small") for y in scols})
+    cfg["TOTAL"] = st.column_config.NumberColumn("TOTAL", format="$%,.0f", width="small")
     return cfg
 
 def total_row_style(df, num_cols):
@@ -102,59 +116,65 @@ def total_row_style(df, num_cols):
         lambda r: ["background-color:#1E3A5F;color:white;font-weight:bold"] * len(r), axis=1
     ).format(lambda x: "-" if x == 0 else (f"({abs(x):,.0f})" if x < 0 else f"${x:,.0f}"), subset=num_cols)
 
-# ── RENDER SECTION (genérico para cualquier sección) ───────────────────────────
+# ── RENDER SECTION ─────────────────────────────────────────────────────────────
 def render_section(title, key, section_data, scols, selected):
     st.markdown(f'<div class="section-hdr">{title}</div>', unsafe_allow_html=True)
 
-    labels = [r[0] for r in section_data]
-    n_rows = len(labels)
+    labels   = [r[0] for r in section_data]
+    n_rows   = len(labels)
+    vals_key = f"vals_{key}_{selected}"
 
-    # TOTAL column desde session state (1-run lag aceptable)
-    ss_key = f"totals_{key}_{selected}"
-    if ss_key not in st.session_state:
-        st.session_state[ss_key] = [sum(r[1]) for r in section_data]
-    totals = st.session_state[ss_key]
-    if len(totals) != n_rows:
-        totals = [sum(r[1]) for r in section_data]
+    # Inicializar con valores del sheet
+    if vals_key not in st.session_state or len(st.session_state[vals_key]) != n_rows:
+        st.session_state[vals_key] = [list(r[1]) for r in section_data]
 
-    df = pd.DataFrame(
-        {"Concepto": labels}
-        | {y: [section_data[i][1][j] for i in range(n_rows)] for j, y in enumerate(scols)}
-        | {"TOTAL": totals}
-    )
+    # TOTAL por fila calculado desde session state
+    row_totals = [sum(v) for v in st.session_state[vals_key]]
+
+    df = pd.DataFrame(st.session_state[vals_key], columns=scols)
+    df.insert(0, "Concepto", labels)
+    df["TOTAL"] = row_totals
 
     edited = st.data_editor(
-        df, use_container_width=True, num_rows="fixed",
+        df,
+        use_container_width=True,
+        num_rows="fixed",
         key=f"editor_{key}_{selected}",
         disabled=["TOTAL"],
         column_config=col_cfg(scols),
         hide_index=True,
     )
 
-    # Extraer valores editados (concepto + valores por año)
-    result = []
-    for i in range(len(edited)):
-        concept = str(edited.at[i, "Concepto"] or f"Concepto {i+1}")
-        vals = [float(edited.at[i, y] or 0) for y in scols]
-        result.append((concept, vals))
+    edited[scols] = edited[scols].fillna(0).astype(float)
 
-    # Fila TOTAL (suma de columnas — actualiza en tiempo real)
-    col_sums = {y: sum(edited.at[i, y] or 0 for i in range(len(edited))) for y in scols}
-    total_val = sum(col_sums.values())
-    total_row = pd.DataFrame(
-        {**{"Concepto": [f"▶ TOTAL {key}"]},
-         **{y: [col_sums[y]] for y in scols},
-         **{"TOTAL": [total_val]}}
-    )
+    result   = []
+    new_vals = []
+    for i in range(len(edited)):
+        concept = str(edited.iloc[i]["Concepto"] or f"Concepto {i+1}")
+        vals    = edited.iloc[i][scols].tolist()
+        result.append((concept, vals))
+        new_vals.append(vals)
+
+    # Si el usuario editó, actualizar y redibujar para reflejar TOTAL por fila
+    if new_vals != st.session_state[vals_key]:
+        st.session_state[vals_key] = new_vals
+        st.rerun()
+
+    # Fila de totales por columna
+    col_sums  = edited[scols].sum()
+    total_val = col_sums.sum()
+    total_row = pd.DataFrame([{
+        "Concepto": f"▶ TOTAL {key}",
+        **col_sums.to_dict(),
+        "TOTAL": total_val
+    }])
+
     st.dataframe(
         total_row_style(total_row, scols + ["TOTAL"]),
         use_container_width=True,
         hide_index=True,
         column_config={"Concepto": st.column_config.TextColumn("Concepto", width=CONCEPT_WIDTH)},
     )
-
-    # Actualizar session state para próximo run
-    st.session_state[ss_key] = [sum(vals) for _, vals in result]
 
     return result
 
@@ -167,7 +187,7 @@ col_sel, col_info = st.columns([2, 5])
 with col_sel:
     selected = st.selectbox("Proyecto", projects, key="project_selector")
 with col_info:
-    st.markdown(f"<br><span style='color:#888;font-size:13px'>Archivo: <code>DCF_DATA_APP.xlsx</code> · Hoja: <code>{selected}</code></span>",
+    st.markdown(f"<br><span style='color:#888;font-size:13px'>Fuente: <code>Google Sheets</code> · Hoja: <code>{selected}</code></span>",
                 unsafe_allow_html=True)
 
 D, YEARS = load_defaults(selected)
