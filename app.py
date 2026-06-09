@@ -15,7 +15,7 @@ st.markdown("""
 section[data-testid="stSidebar"] { display: none; }
 .main .block-container {
     padding-top: 1.5rem;
-    max-width: 70vw !important;
+    max-width: 60vw !important;
     margin-left: auto !important;
     margin-right: auto !important;
     padding-left: 1rem;
